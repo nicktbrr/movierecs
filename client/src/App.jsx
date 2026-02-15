@@ -8,11 +8,32 @@ import './App.css'
 const MOVIES = [movie1, movie2, movie3, movie4]
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 
+// Recommendation API: same shape as backend RecommendRequest
+// { user_id: number, interactions: [{ item_id: number, datetime?: string, weight?: number }], k?: number }
+function buildRecommendBody(userId, interactions, k = 4) {
+  return {
+    user_id: userId,
+    interactions: interactions.map(({ item_id, datetime: dt, weight: w }) => ({
+      item_id,
+      ...(dt != null && { datetime: dt }),
+      ...(w != null && { weight: w }),
+    })),
+    k,
+  }
+}
+
 function App() {
   const [gameStarted, setGameStarted] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [gameOver, setGameOver] = useState(false)
   const [driftScores, setDriftScores] = useState(null) // { drift_scores: number[], overall_drift: number }
+  // Item IDs for the current 4 cards (from POST /recommend); used so we send correct format to backend
+  const [cardItemIds, setCardItemIds] = useState([])
+  // Full recommend response to show on results (item_ids, ranks, k)
+  const [recommendations, setRecommendations] = useState(null)
+  // Movie details (title, poster_url) from GET /movies for the recommended item_ids
+  const [movieDetails, setMovieDetails] = useState([])
+  const sessionUserIdRef = useRef(null)
 
   const currentMovie = MOVIES[currentIndex]
 
@@ -29,7 +50,10 @@ function App() {
   function handleChoice(kept) {
     const isLastMovie = currentIndex + 1 >= MOVIES.length
     if (isLastMovie) {
-      const payload = { metrics: metricsPerCardRef.current }
+      const metrics = metricsPerCardRef.current
+      const directions = metrics.map((m) => m.direction)
+      const payload = { metrics }
+      // Send session-metrics (kinematic drift) as before
       fetch(`${API_BASE}/session-metrics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,21 +64,134 @@ function App() {
           setDriftScores({
             drift_scores: data.drift_scores ?? [],
             overall_drift: data.overall_drift ?? 0,
-            directions: metricsPerCardRef.current.map((m) => m.direction),
+            directions,
           })
           setGameOver(true)
         })
         .catch(() => setGameOver(true))
+
+      // Send interaction history to get next top-k recommendations; show them on results
+      if (sessionUserIdRef.current != null && cardItemIds.length === metrics.length) {
+        const interactions = cardItemIds.map((item_id, i) => ({
+          item_id,
+          weight: directions[i] === 1 ? 3 : 1,
+        }))
+        const body = buildRecommendBody(sessionUserIdRef.current, interactions, 4)
+        fetch(`${API_BASE}/recommend`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data?.item_ids != null) setRecommendations(data)
+          })
+          .catch(() => {})
+      }
     } else {
       setCurrentIndex((i) => i + 1)
     }
   }
 
+  // Fetch title + poster for recommended item_ids when recommendations change
+  useEffect(() => {
+    if (!recommendations?.item_ids?.length) {
+      setMovieDetails([])
+      return
+    }
+    const ids = recommendations.item_ids.join(',')
+    fetch(`${API_BASE}/movies?item_ids=${encodeURIComponent(ids)}`)
+      .then((res) => res.json())
+      .then((list) => setMovieDetails(Array.isArray(list) ? list : []))
+      .catch(() => setMovieDetails([]))
+  }, [recommendations?.item_ids?.join?.() ?? ''])
+
+  const movieDetailsByItemId = movieDetails.reduce((acc, m) => ({ ...acc, [m.item_id]: m }), {})
+
   function handleRestart() {
-    setCurrentIndex(0)
-    setGameOver(false)
-    setDriftScores(null)
-    metricsPerCardRef.current = []
+    setMovieDetails([])
+    // Fetch next 4 based on last round's swipes so each play gets new recs
+    const directions = driftScores?.directions
+    const hasHistory = sessionUserIdRef.current != null && cardItemIds.length >= 1 && directions?.length === cardItemIds.length
+
+    if (hasHistory) {
+      const interactions = cardItemIds.map((item_id, i) => ({
+        item_id,
+        weight: directions[i] === 1 ? 3 : 1,
+      }))
+      const body = buildRecommendBody(sessionUserIdRef.current, interactions, 4)
+      fetch(`${API_BASE}/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.item_ids != null && data.item_ids.length > 0) {
+            setCardItemIds(data.item_ids)
+            setRecommendations(data)
+          }
+          setCurrentIndex(0)
+          setGameOver(false)
+          setDriftScores(null)
+          metricsPerCardRef.current = []
+        })
+        .catch(() => {
+          setCurrentIndex(0)
+          setGameOver(false)
+          setDriftScores(null)
+          setRecommendations(null)
+          metricsPerCardRef.current = []
+        })
+    } else {
+      // No history (e.g. first time) — cold start again
+      const body = buildRecommendBody(sessionUserIdRef.current ?? Number(Date.now().toString().slice(-9)), [], 4)
+      if (sessionUserIdRef.current == null) sessionUserIdRef.current = body.user_id
+      fetch(`${API_BASE}/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setCardItemIds(Array.isArray(data?.item_ids) ? data.item_ids : [])
+          setRecommendations(data?.item_ids != null ? data : null)
+          setCurrentIndex(0)
+          setGameOver(false)
+          setDriftScores(null)
+          metricsPerCardRef.current = []
+        })
+        .catch(() => {
+          setCurrentIndex(0)
+          setGameOver(false)
+          setDriftScores(null)
+          setRecommendations(null)
+          metricsPerCardRef.current = []
+        })
+    }
+  }
+
+  function handleStart() {
+    if (sessionUserIdRef.current == null) {
+      sessionUserIdRef.current = Number(Date.now().toString().slice(-9))
+    }
+    // Fetch initial recommendations (cold start) so we have item_ids for this round
+    const body = buildRecommendBody(sessionUserIdRef.current, [], 4)
+    fetch(`${API_BASE}/recommend`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setCardItemIds(Array.isArray(data.item_ids) ? data.item_ids : [])
+        setRecommendations(data?.item_ids != null ? data : null)
+        setGameStarted(true)
+      })
+      .catch(() => {
+        setCardItemIds([])
+        setGameStarted(true)
+      })
   }
 
   // ---- Drag state ----
@@ -183,7 +320,7 @@ function App() {
           <button
             type="button"
             className="start-btn"
-            onClick={() => setGameStarted(true)}
+            onClick={handleStart}
           >
             Start
           </button>
@@ -214,6 +351,69 @@ function App() {
                     )}
                   </li>
                 ))}
+              </ul>
+            </div>
+          )}
+          {recommendations && (recommendations.item_ids?.length > 0) && (
+            <div className="recommendations-block">
+              {/* Top choice: #1 with large poster */}
+              {(() => {
+                const topId = recommendations.item_ids[0]
+                const topMovie = movieDetailsByItemId[topId]
+                return (
+                  <div className="recommendations-top-choice">
+                    <p className="recommendations-top-label">Your top choice</p>
+                    <div className="recommendations-top-card">
+                      {topMovie?.poster_url ? (
+                        <img
+                          src={topMovie.poster_url}
+                          alt={topMovie.title || ''}
+                          className="recommendations-top-poster"
+                        />
+                      ) : (
+                        <div className="recommendations-top-poster recommendations-top-poster-placeholder">
+                          No image
+                        </div>
+                      )}
+                      <div className="recommendations-top-info">
+                        <span className="recommendations-top-title">
+                          {topMovie?.title ? `${topMovie.title}${topMovie.release_year ? ` (${Math.round(topMovie.release_year)})` : ''}` : `Movie ID ${topId}`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+              <p className="recommendations-label">
+                Top {recommendations.k} recommendations for you
+                {recommendations.source === 'model' ? (
+                  <span className="recommendations-source"> — personalized from your swipes</span>
+                ) : (
+                  <span className="recommendations-source recommendations-source-cold"> — random picks (swipe a round to get personalized)</span>
+                )}
+              </p>
+              <ul className="recommendations-list">
+                {recommendations.item_ids.map((id, i) => {
+                  const movie = movieDetailsByItemId[id]
+                  const rank = recommendations.ranks?.[i] ?? i + 1
+                  return (
+                    <li key={id} className="recommendations-list-item">
+                      {movie?.poster_url && (
+                        <img
+                          src={movie.poster_url}
+                          alt={movie.title || ''}
+                          className="recommendations-poster"
+                        />
+                      )}
+                      <div className="recommendations-meta">
+                        <strong>#{rank}</strong>
+                        <span className="recommendations-title">
+                          {movie?.title ? `${movie.title}${movie.release_year ? ` (${Math.round(movie.release_year)})` : ''}` : `Movie ID ${id}`}
+                        </span>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}

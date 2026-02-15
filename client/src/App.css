@@ -205,6 +205,134 @@ h1 {
   color: #646cff;
 }
 
+.recommendations-block {
+  text-align: left;
+  margin-bottom: 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.recommendations-top-choice {
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.recommendations-top-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #86efac;
+  margin: 0 0 0.5rem;
+}
+
+.recommendations-top-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.recommendations-top-poster {
+  width: 120px;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 12px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.recommendations-top-poster-placeholder {
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.recommendations-top-info {
+  flex: 1;
+}
+
+.recommendations-top-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.recommendations-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 0.5rem;
+}
+
+.recommendations-source {
+  font-weight: 400;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.recommendations-source-cold {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.recommendations-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.recommendations-list li {
+  padding: 0.35rem 0;
+}
+
+.recommendations-list-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  list-style: none;
+}
+
+.recommendations-list-item:last-child {
+  border-bottom: none;
+}
+
+.recommendations-poster {
+  width: 60px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.recommendations-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+}
+
+.recommendations-meta strong {
+  color: #86efac;
+  margin-right: 0.35rem;
+}
+
+.recommendations-title {
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.recommendations-list strong {
+  color: #86efac;
+  margin-right: 0.35rem;
+}
+
 .restart-btn {
   padding: 0.75rem 1.5rem;
   font-size: 1rem;

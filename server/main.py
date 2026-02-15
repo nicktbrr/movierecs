@@ -63,11 +63,11 @@ def _calculate_total_data_score(m: CardMetrics) -> float:
     # --- THE WEIGHTED CONVICTION ---
     # We now use all 5 variables. Initial latency weighted lightly.
     conviction = (
-        (latency_score * 0.08) +  # Did they start fast? (reduced weight)
-        (flips_score * 0.32) +    # Did they stay the course?
-        (peak_norm * 0.22) +      # Was it aggressive?
-        (smoothness * 0.18) +     # Was it a smooth movement?
-        (time_score * 0.20)       # Was it a quick total interaction?
+        (latency_score * 0.20) +  # Did they start fast?
+        (flips_score * 0.30) +    # Did they stay the course?
+        (peak_norm * 0.20) +      # Was it aggressive?
+        (smoothness * 0.15) +     # Was it a smooth movement?
+        (time_score * 0.15)       # Was it a quick total interaction?
     )
 
     # --- ASYMMETRIC MAPPING (Direction + Forgiveness) ---
